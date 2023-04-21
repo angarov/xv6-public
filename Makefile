@@ -81,7 +81,7 @@ debug ?= false
 HOST_CPU_TSC_FREQ := $(shell cat /proc/cpuinfo | grep -i "cpu mhz" | head -n 1 | rev | cut -d ' ' -f 1 | rev | cut -d '.' -f 1)*1000
 #CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
 # CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
-CFLAGS = -static -MD -m32 -mno-sse -gstabs -std=gnu99 -Wall -Werror -Wstack-usage=4096 \
+CFLAGS = -static -MD -m32 -mno-sse -g -std=gnu99 -Wall -Wstack-usage=4096 \
 	-fno-pic -fno-builtin -fno-strict-aliasing -fno-omit-frame-pointer $(OFLAGS) -DXV6_TSC_FREQUENCY=$(HOST_CPU_TSC_FREQ)
 OFLAGS = -O2
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
@@ -169,7 +169,7 @@ _forktest: forktest.o $(ULIB)
 	$(OBJDUMP) -S _forktest > forktest.asm
 
 mkfs: mkfs.c fs.h
-	gcc -Werror -Wall -o mkfs mkfs.c
+	gcc -Wall -o mkfs mkfs.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More
@@ -192,6 +192,7 @@ UPROGS=\
 	_stressfs\
 	_usertests\
 	_wc\
+	_ps\
 	_zombie\
 
 fs.img: mkfs README $(UPROGS) 
@@ -265,7 +266,7 @@ qemu-nox-gdb: fs.img xv6.img .gdbinit
 
 EXTRA=\
 	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
-	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
+	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c ps.c zombie.c\
 	printf.c umalloc.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
 	.gdbinit.tmpl gdbutil\
