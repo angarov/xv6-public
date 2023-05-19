@@ -839,3 +839,34 @@ struct cgroup *proc_get_cgroup(void)
      cg = proc->cgroup;
   return cg;
 }
+
+// process status
+int
+cps156(void) 
+{
+  struct proc *p;
+
+	// Enable interrupts on this processor.
+	sti();
+
+	  // Loop over process table looking for process with pid.
+	acquire(&ptable.lock);
+	cprintf("name \t pid \t state \t \t ppid \n");
+	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    // int ppid = 0;
+
+    // if (p->parent->pid <= 1) {
+    //   ppid = 0;
+    // } else {
+    //   ppid = p->parent->pid;
+    // }
+	    // if (p->state == RUNNING)
+	    //   cprintf("%s \t %d \t RUNNING \t %d \n", p->name, get_pid_for_ns(ptable.proc, p->child_pid_ns), ppid);
+      // else 
+	    //   cprintf("%s \t %d \t SLEEPING \t %d \n", p->name, get_pid_for_ns(ptable.proc, p->child_pid_ns), ppid);
+	}
+
+	release(&ptable.lock);
+
+  return 156;
+}
