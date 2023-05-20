@@ -851,19 +851,30 @@ cps156(void)
 
 	  // Loop over process table looking for process with pid.
 	acquire(&ptable.lock);
-	cprintf("name \t pid \t state \t \t ppid \n");
+	cprintf("name \t pid \t state \t \t extpid \t ppid \t cputime \n");
 	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    // int ppid = 0;
+    if(p->state == UNUSED)
+      continue;
 
-    // if (p->parent->pid <= 1) {
-    //   ppid = 0;
-    // } else {
-    //   ppid = p->parent->pid;
-    // }
-	    // if (p->state == RUNNING)
-	    //   cprintf("%s \t %d \t RUNNING \t %d \n", p->name, get_pid_for_ns(ptable.proc, p->child_pid_ns), ppid);
-      // else 
-	    //   cprintf("%s \t %d \t SLEEPING \t %d \n", p->name, get_pid_for_ns(ptable.proc, p->child_pid_ns), ppid);
+    int pid = p->ns_pid;
+    int ppid = p->parent->ns_pid;
+    int cputime = p->cpu_time;
+    int extpid = proc_pid(p);
+
+    for (int i = 0; i < MAX_PID_NS_DEPTH; i++) {
+      if (p->pids[i].pid_ns->ref == 1) {
+        extpid = p->pids[i].pid;
+      }
+    }
+
+    if (extpid == 1) {
+      ppid = 0;
+    }
+	    
+    if (p->state == RUNNING)
+	    cprintf("%s \t %d \t RUNNING \t %d \t \t %d \t %d \n", p->name, pid, extpid, ppid, cputime);
+    else 
+    	cprintf("%s \t %d \t SLEEPING \t %d \t \t %d \t %d \n", p->name, pid, extpid, ppid, cputime);
 	}
 
 	release(&ptable.lock);

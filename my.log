@@ -1,0 +1,71 @@
+ps
+name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5414 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 1702 
+ps 	 3 	 RUNNING 	 3 	 	 2 	 553 
+$ ps
+name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5414 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 3638 
+ps 	 4 	 RUNNING 	 4 	 	 2 	 0 
+
+pouch start c1
+$ $ Pouch: c1 starting
+$ ps
+name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5414 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 8650 
+ps 	 9 	 RUNNING 	 9 	 	 2 	 1598 
+pouch 	 7 	 SLEEPING 	 7 	 	 1 	 3168 
+sh 	 1 	 SLEEPING 	 8 	 	 7 	 2714 
+$ 
+pouch connect c1
+$ 
+tty0 connected
+ps
+name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5414 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 12748 
+ps 	 2 	 RUNNING 	 12 	 	 1 	 0 
+pouch 	 7 	 SLEEPING 	 7 	 	 1 	 3168 
+sh 	 1 	 SLEEPING 	 8 	 	 7 	 5778 
+ps
+$ name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5414 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 12748 
+ps 	 3 	 RUNNING 	 13 	 	 1 	 0 
+pouch 	 7 	 SLEEPING 	 7 	 	 1 	 3168 
+sh 	 1 	 SLEEPING 	 8 	 	 7 	 7120 
+$ ps
+name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5414 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 12748 
+ps 	 4 	 RUNNING 	 14 	 	 1 	 930 
+pouch 	 7 	 SLEEPING 	 7 	 	 1 	 3168 
+sh 	 1 	 SLEEPING 	 8 	 	 7 	 9534 
+$ 
+pouch disconnect
+$ Console connected
+ps
+name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5414 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 14350 
+ps 	 17 	 RUNNING 	 17 	 	 2 	 0 
+pouch 	 7 	 SLEEPING 	 7 	 	 1 	 3168 
+sh 	 1 	 SLEEPING 	 8 	 	 7 	 11405 
+$ ps
+name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5414 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 16980 
+ps 	 18 	 RUNNING 	 18 	 	 2 	 961 
+pouch 	 7 	 SLEEPING 	 7 	 	 1 	 3168 
+sh 	 1 	 SLEEPING 	 8 	 	 7 	 11405 
+$ 
+pouch destroy c1
+$ Pouch: c1 destroyed
+zombie!
+$ ps
+name 	 pid 	 state 	 	 extpid 	 ppid 	 cputime 
+init 	 1 	 SLEEPING 	 1 	 	 0 	 5716 
+sh 	 2 	 SLEEPING 	 2 	 	 1 	 21842 
+ps 	 21 	 RUNNING 	 21 	 	 2
