@@ -1,6 +1,9 @@
+MAKEFILE_DIRECTORY := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+
 OBJS = \
 	bio.o\
 	console.o\
+	device.o\
 	exec.o\
 	file.o\
 	fs.o\
@@ -11,7 +14,11 @@ OBJS = \
 	lapic.o\
 	log.o\
 	main.o\
+	kmount.o\
+	mount_ns.o\
+	pid_ns.o\
 	mp.o\
+	namespace.o\
 	picirq.o\
 	pipe.o\
 	proc.o\
@@ -21,12 +28,20 @@ OBJS = \
 	swtch.o\
 	syscall.o\
 	sysfile.o\
+	sysmount.o\
+	sysnamespace.o\
 	sysproc.o\
 	trapasm.o\
 	trap.o\
 	uart.o\
 	vectors.o\
 	vm.o\
+	udiv.o\
+	steady_clock.o\
+	klib.o\
+	cgfs.o\
+	cgroup.o\
+	cpu_account.o\
 
 # Cross-compiling (e.g., on Mac OS X)
 # TOOLPREFIX = i386-jos-elf
@@ -55,11 +70,11 @@ endif
 
 # Try to infer the correct QEMU
 ifndef QEMU
-QEMU = $(shell if which qemu > /dev/null; \
+QEMU = $(shell if which qemu > /dev/null 2>&1; \
 	then echo qemu; exit; \
-	elif which qemu-system-i386 > /dev/null; \
+	elif which qemu-system-i386 > /dev/null 2>&1; \
 	then echo qemu-system-i386; exit; \
-	elif which qemu-system-x86_64 > /dev/null; \
+	elif which qemu-system-x86_64 > /dev/null 2>&1; \
 	then echo qemu-system-x86_64; exit; \
 	else \
 	qemu=/Applications/Q.app/Contents/MacOS/i386-softmmu.app/Contents/MacOS/i386-softmmu; \
@@ -76,27 +91,28 @@ AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
-CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
+debug ?= false
+#x86
+HOST_CPU_TSC_FREQ := $(shell cat /proc/cpuinfo | grep -i "cpu mhz" | head -n 1 | rev | cut -d ' ' -f 1 | rev | cut -d '.' -f 1)*1000
+#ARM
+#HOST_CPU_TSC_FREQ := $(shell cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq )
+ifeq ($(debug), true)
+CFLAGS = -DXV6_WAIT_FOR_DEBUGGER=1 -fno-pic -static -fno-builtin -fno-strict-aliasing -Og -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer -std=gnu99 -mno-sse -DXV6_TSC_FREQUENCY=$(HOST_CPU_TSC_FREQ)
+else
+CFLAGS = -DXV6_WAIT_FOR_DEBUGGER=0 -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -m32 -Werror -fno-omit-frame-pointer -std=gnu99 -mno-sse -DXV6_TSC_FREQUENCY=$(HOST_CPU_TSC_FREQ)
+endif
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''
 LDFLAGS += -m $(shell $(LD) -V | grep elf_i386 2>/dev/null | head -n 1)
 
-# Disable PIE when possible (for Ubuntu 16.10 toolchain)
-ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]no-pie'),)
-CFLAGS += -fno-pie -no-pie
-endif
-ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]nopie'),)
-CFLAGS += -fno-pie -nopie
-endif
-
-xv6.img: bootblock kernel
-	dd if=/dev/zero of=xv6.img count=10000
+xv6.img: bootblock kernel fs.img | windows_debugging
+	dd if=/dev/zero of=xv6.img count=1000
 	dd if=bootblock of=xv6.img conv=notrunc
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
 
 xv6memfs.img: bootblock kernelmemfs
-	dd if=/dev/zero of=xv6memfs.img count=10000
+	dd if=/dev/zero of=xv6memfs.img count=1000
 	dd if=bootblock of=xv6memfs.img conv=notrunc
 	dd if=kernelmemfs of=xv6memfs.img seek=1 conv=notrunc
 
@@ -120,7 +136,9 @@ initcode: initcode.S
 	$(OBJCOPY) -S -O binary initcode.out initcode
 	$(OBJDUMP) -S initcode.o > initcode.asm
 
-kernel: $(OBJS) entry.o entryother initcode kernel.ld
+MMN13_OBJ = mount_ns.o
+
+kernel: entry.o entryother initcode kernel.ld  $(MMN13_OBJ) #$(OBJS) # $(MMN13_OBJ)
 	$(LD) $(LDFLAGS) -T kernel.ld -o kernel entry.o $(OBJS) -b binary initcode entryother
 	$(OBJDUMP) -S kernel > kernel.asm
 	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
@@ -141,14 +159,15 @@ tags: $(OBJS) entryother.S _init
 	etags *.S *.c
 
 vectors.S: vectors.pl
-	./vectors.pl > vectors.S
+	perl vectors.pl > vectors.S
 
-ULIB = ulib.o usys.o printf.o umalloc.o
+ULIB = ulib.o usys.o printf.o umalloc.o tty.o
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
+
 
 _forktest: forktest.o $(ULIB)
 	# forktest has less library code linked in - needs to be small
@@ -157,7 +176,7 @@ _forktest: forktest.o $(ULIB)
 	$(OBJDUMP) -S _forktest > forktest.asm
 
 mkfs: mkfs.c fs.h
-	gcc -Werror -Wall -o mkfs mkfs.c
+	gcc -ggdb -Werror -Wall -o mkfs mkfs.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More
@@ -175,24 +194,50 @@ UPROGS=\
 	_ln\
 	_ls\
 	_mkdir\
+	_mounttest\
 	_rm\
 	_sh\
 	_stressfs\
 	_usertests\
+	_pidns_tests\
 	_wc\
 	_zombie\
+	_mount\
+	_umount\
+	_timer\
+	_cpu\
+	_cgroupstests\
+        _pouch\
+        _ctrl_grp \
+        _demo_pid_ns \
+        _demo_mount_ns \
+        _dump_mounttable \
+        _ioctltests
 
-fs.img: mkfs README $(UPROGS)
-	./mkfs fs.img README $(UPROGS)
+INTERNAL_DEV=\
+	internal_fs_a\
+	internal_fs_b\
+	internal_fs_c\
+
+internal_fs_%: mkfs
+	dd if=/dev/zero of=$@ count=80
+	./mkfs $@ 1
+
+fs.img: mkfs README $(INTERNAL_DEV) # $(UPROGS) 
+	./mkfs fs.img 0 README $(UPROGS) $(INTERNAL_DEV)
 
 -include *.d
 
-clean: 
-	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
+clean:
+	rm -rf mkfs bootblock.o fs.img xv6.img mount_ns.o kernel
+
+#clean: windows_debugging_clean
+#	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*.o *.d *.asm *.sym vectors.S bootblock entryother \
-	initcode initcode.out kernel xv6.img fs.img kernelmemfs \
-	xv6memfs.img mkfs .gdbinit \
-	$(UPROGS)
+	initcode initcode.out kernel xv6.img fs.img kernelmemfs mkfs \
+	.gdbinit \
+	$(UPROGS) \
+	$(INTERNAL_DEV)
 
 # make a printout
 FILES = $(shell grep -v '^\#' runoff.list)
@@ -224,6 +269,10 @@ QEMUOPTS = -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,
 qemu: fs.img xv6.img
 	$(QEMU) -serial mon:stdio $(QEMUOPTS)
 
+qemuss: 
+	cp ss/* ./ 
+	$(QEMU) -serial mon:stdio $(QEMUOPTS)
+
 qemu-memfs: xv6memfs.img
 	$(QEMU) -drive file=xv6memfs.img,index=0,media=disk,format=raw -smp $(CPUS) -m 256
 
@@ -249,8 +298,8 @@ qemu-nox-gdb: fs.img xv6.img .gdbinit
 
 EXTRA=\
 	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
-	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
-	printf.c umalloc.c\
+        ln.c ls.c mkdir.c mounttest.c rm.c stressfs.c usertests.c pidns_tests.c wc.c zombie.c\
+        printf.c umalloc.c mount.c umount.c timer.c cpu.c cgroupstests.c ioctltests.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
 	.gdbinit.tmpl gdbutil\
 
@@ -283,4 +332,19 @@ tar:
 	cp dist/* dist/.gdbinit.tmpl /tmp/xv6
 	(cd /tmp; tar cf - xv6) | gzip >xv6-rev10.tar.gz  # the next one will be 10 (9/17)
 
-.PHONY: dist-test dist
+windows_debugging_mkdir:
+	@mkdir -p windows-debugging
+
+windows_debugging: \
+	$(patsubst windows-debugging-templates/%, windows-debugging/%, $(shell find "windows-debugging-templates" -type f))
+
+windows-debugging/%: windows-debugging-templates/% | windows_debugging_mkdir
+	@rm -f $@ && \
+	cp $< windows-debugging && \
+	sed -i 's@{{project_root}}@$(MAKEFILE_DIRECTORY)@g' $@
+
+windows_debugging_clean:
+	@rm -rf windows-debugging
+
+.PHONY: dist-test dist windows_debugging windows_debugging_mkdir windows_debugging_clean
+
