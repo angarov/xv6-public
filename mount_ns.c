@@ -49,15 +49,21 @@ void mount_nsput(struct mount_ns* mount_ns)
   release(&mountnstable.lock);
 }
 
+// Leonid angarov 310869656
 static struct mount_ns* allocmount_ns()
 {
   acquire(&mountnstable.lock);
 
-  // FIX ME: allocate proper entry to preserve a correct mountnamepaces structure
-  struct mount_ns* mount_ns = &mountnstable.mount_ns[0];
+  for (int i = 0; i < NNAMESPACE; i++) {
+    if (mountnstable.mount_ns[i].ref == 0) {
+      struct mount_ns* mount_ns = &mountnstable.mount_ns[i];
+      mount_ns->ref = 1;
+      release(&mountnstable.lock);
+      return mount_ns;
+    }
+  }
   release(&mountnstable.lock);
-  return (mount_ns);
-
+  
   panic("out of mount_ns objects");
 }
 
